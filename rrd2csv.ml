@@ -16,7 +16,6 @@ open Pervasiveext
 open Xstringext
 open Listext
 open Rrd
-open Fun
 
 let version = "0.1.3"
 
@@ -65,18 +64,18 @@ module XAPI = struct
 
 	include Client
 
-	let rpc xml =
-		let open Xmlrpc_client in
-		let http = xmlrpc ~version:"1.0" "/" in
-		XMLRPC_protocol.rpc ~srcstr:"rrd2csv" ~dststr:"xapi" 
-			~transport:(Unix (Filename.concat "/var/lib/xcp" "xapi")) ~http xml
+	let rpc request =
+		Rpc_client.do_rpc_unix
+		~content_type:(Rpc_client.content_type_of_string "text/xml")
+		~filename:(Filename.concat "/var/lib/xcp" "xapi")
+		~path:"/" request
 
 	(* execute f within an active session *)
 	let rec retry_with_session f x =
 		let session =
 			let rec aux () = 
 				try Client.Session.login_with_password
-					~rpc ~uname:"" ~pwd:"" ~version:"1.4" ~originator:"rrd2csv"
+					~rpc ~uname:"" ~pwd:"" ~version:"1.4"
 				with _ -> Thread.delay !delay; aux () in
 			aux () in
 		let logout_unsafe session =
@@ -451,7 +450,7 @@ module Xport = struct
 			let now = Unix.gettimeofday () in
 			let qstring =
 				Printf.sprintf "/rrd_updates?session_id=%s&start=%.0f" 
-					(Ref.string_of session) (now -. backstep) in
+					session (now -. backstep) in
 			let qstring = Opt.fold_left 
 				(fun acc vm_uuid -> acc ^ "&vm_uuid=" ^ vm_uuid) qstring vm in
 			let qstring = Opt.fold_left
